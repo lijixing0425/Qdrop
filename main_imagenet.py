@@ -145,8 +145,9 @@ if __name__ == '__main__':
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # general parameters for data and model
     parser.add_argument('--seed', default=1005, type=int, help='random seed for results reproduction')
-    parser.add_argument('--arch', default='mnasnet', type=str, help='model name',
-                        choices=['resnet18', 'resnet50', 'mobilenetv2', 'regnetx_600m', 'regnetx_3200m', 'mnasnet'])
+    parser.add_argument('--arch', default='mnasnetx1', type=str, help='model name',
+                        choices=['resnet18', 'resnet50', 'mobilenetv2', 'mobilenetv1', 'shufflenetv2',
+                                 'regnetx_600m', 'regnetx_3200m', 'mnasnetx1', 'mnasnetx2'])
     parser.add_argument('--batch_size', default=64, type=int, help='mini-batch size for data loader')
     parser.add_argument('--workers', default=24, type=int, help='number of workers for data loader')
     parser.add_argument('--data_path', default=r'C:\DL_DATA\Imagenet', type=str, help='path to ImageNet data')
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     # weight calibration parameters
     parser.add_argument('--num_samples', default=1024, type=int, help='size of the calibration dataset')
     parser.add_argument('--iters_w', default=20000, type=int, help='number of iteration for adaround')
-    parser.add_argument('--weight', default=0.1, type=float, help='weight of rounding cost vs the reconstruction loss.')
+    parser.add_argument('--weight', default=0.2, type=float, help='weight of rounding cost vs the reconstruction loss.')
     parser.add_argument('--keep_cpu', action='store_true', help='keep the calibration data on cpu')
 
     parser.add_argument('--wwq', default=True, action='store_true', help='weight_quant for input in weight reconstruction')
@@ -197,7 +198,7 @@ if __name__ == '__main__':
     cnn.eval()
 
     # build quantization parameters
-    wq_params = {'n_bits': args.n_bits_w, 'channel_wise': args.channel_wise, 'scale_method': 'mse'}#67.83
+    wq_params = {'n_bits': args.n_bits_w, 'channel_wise': args.channel_wise, 'scale_method': 'mse'}
     aq_params = {'n_bits': args.n_bits_a, 'channel_wise': False, 'scale_method': 'mse',
                  'leaf_param': True, 'prob': args.prob}
 
@@ -212,9 +213,7 @@ if __name__ == '__main__':
     qnn.disable_network_output_quantization()
     print('check the model!')
     print(qnn)
-    print('Full quantization (W{}A{}) accuracy: {}'.format(args.n_bits_w, args.n_bits_a,
-                                                           validate_model(test_loader, qnn)))
-    exit()
+
     cali_data, cali_target = get_train_samples(train_loader, num_samples=args.num_samples)
 
     device = next(qnn.parameters()).device

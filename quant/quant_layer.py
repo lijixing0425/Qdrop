@@ -73,7 +73,6 @@ def pso_asymmetric_quantization_tensor(weight, num_bits, num_particles, iteratio
         global_best_value[global_best_mask] = global_min_mse[global_best_mask]
         global_best_indices_expanded = global_min_indices.expand(-1, 2)
         global_best_updated_position = torch.gather(position, 0, global_best_indices_expanded)
-        print(global_best_updated_position.shape)
         global_best_position = torch.where(global_best_mask.unsqueeze(-1), global_best_updated_position,
                                            global_best_position)
 
@@ -245,9 +244,7 @@ class UniformAffineQuantizer(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.inited is False:
             if self.leaf_param:
-                delta, zero_point = self.init_quantization_scale(x.clone().detach(), self.channel_wise)
-                self.delta = torch.nn.Parameter(torch.tensor(delta), requires_grad=True)
-                self.zero_point = torch.nn.Parameter(torch.tensor(zero_point), requires_grad=True)
+                self.delta, self.zero_point = self.init_quantization_scale(x.clone().detach(), self.channel_wise)
             else:
                 self.delta, self.zero_point = self.init_quantization_scale(x.clone().detach(), self.channel_wise)
 
@@ -264,17 +261,12 @@ class UniformAffineQuantizer(nn.Module):
     def lp_loss(self, pred, tgt, p=2.0, weight_mask=None):
         if not self.channel_wise:
             if weight_mask is not None:
-                x = (pred - tgt).abs().pow(2) * weight_mask
+                x = (pred - tgt).abs().pow(p) * weight_mask
             else:
-                x = (pred - tgt).abs().pow(2)
+                x = (pred - tgt).abs().pow(p)
             return x.mean()
         else:
-            # tgt = tgt.reshape(tgt.shape[0], -1)
-            # pred = pred.reshape(pred.shape[0], -1)
-            #
-            # temp = torch.quantile(tgt.abs(), q=0.33, dim=-1, keepdim=True)
-            # weight = torch.where(tgt.abs() > temp, tgt.abs(), torch.ones_like(tgt) * torch.min(tgt.abs(), -1, keepdim=True)[0])
-            x = (pred - tgt).abs().pow(2)  # * tgt.abs()
+            x = (pred - tgt).abs().pow(p)
             y = torch.flatten(x, 1)
             return y.mean(1)
 
@@ -354,7 +346,6 @@ class UniformAffineQuantizer(nn.Module):
         return best_min, best_max
 
     def get_x_min_x_max(self, x):
-        print(self.scale_method)
         if self.scale_method == 'mse':
             if self.one_side_dist is None:
                 self.one_side_dist = 'pos' if x.min() >= 0.0 else 'neg' if x.max() <= 0.0 else 'no'

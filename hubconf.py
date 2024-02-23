@@ -4,7 +4,10 @@ from models.mobilenetv2 import mobilenetv2 as _mobilenetv2
 from models.mnasnet import mnasnet as _mnasnet
 from models.regnet import regnetx_600m as _regnetx_600m
 from models.regnet import regnetx_3200m as _regnetx_3200m
+from models.shufflenetv2 import ShuffleNetV2
+from models.mobilenetv1 import mobilenet_w1
 from torch.hub import load_state_dict_from_url
+import torch
 
 dependencies = ['torch']
 
@@ -61,35 +64,35 @@ def regnetx_3200m(pretrained=False, **kwargs):
     return model
 
 
-# def mnasnet(pretrained=False, **kwargs):
-#     # Call the model, load pretrained weights
-#     model = _mnasnet(**kwargs)
-#     if pretrained:
-#         load_url = 'https://github.com/yhhhli/BRECQ/releases/download/v1.0/mnasnet.pth.tar'
-#         checkpoint = load_state_dict_from_url(url=load_url, map_location='cpu', progress=True)
-#         model.load_state_dict(checkpoint)
-#     return model
-import torch
-model_root_path = 'C:\\DL_Pro\\PTQ\\HFPTQ\\'
-def mnasnet(pretrained=False, **kwargs):
+def mnasnetx2(pretrained=False, **kwargs):
     # Call the model, load pretrained weights
+    kwargs['scale'] = 2
     model = _mnasnet(**kwargs)
     if pretrained:
-        model.load_state_dict(torch.load(model_root_path+'pretrained_model/mnasnetv1.pth'))
+        load_url = 'https://github.com/yhhhli/BRECQ/releases/download/v1.0/mnasnet.pth.tar'
+        checkpoint = load_state_dict_from_url(url=load_url, map_location='cpu', progress=True)
+        model.load_state_dict(checkpoint)
     return model
 
+def mnasnetx1(pretrained=False, **kwargs):
+    # Call the model, load pretrained weights
+    kwargs['scale'] = 1
+    model = _mnasnet(**kwargs)
+    if pretrained:
+        model.load_state_dict(torch.load('./pretrained_model/mnasnetx1.pth'))
+    return model
 
 
 def shufflenetv2(pretrained=False, **kwargs):
     # Call the model, load pretrained weights
     model = ShuffleNetV2(**kwargs)
     if pretrained:
-        model.load_state_dict(torch.load(model_root_path+'pretrained_model/shufflenetv2.pth'))
+        model.load_state_dict(torch.load('./pretrained_model/shufflenetv2.pth'))
     return model
 
 def mobilenetv1(pretrained=False, **kwargs):
     # Call the model, load pretrained weights
     model = mobilenet_w1(**kwargs)
     if pretrained:
-        model.load_state_dict(torch.load(model_root_path+'pretrained_model/mobilenetv1.pth'))
+        model.load_state_dict(torch.load('./pretrained_model/mobilenetv1.pth'))
     return model

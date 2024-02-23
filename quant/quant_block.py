@@ -4,6 +4,9 @@ from models.resnet import BasicBlock, Bottleneck
 from models.regnet import ResBottleneckBlock
 from models.mobilenetv2 import InvertedResidual
 from models.mnasnet import _InvertedResidual
+from models.shufflenetv2 import shufflenetv2_block, channel_shuffle
+from models.mobilenetv1 import DwsConvBlock
+import torch
 
 
 class BaseQuantBlock(nn.Module):
@@ -187,6 +190,75 @@ class _QuantInvertedResidual(BaseQuantBlock):
             out = self.act_quantizer(out)
         return out
 
+class Quant_shufflenetv2_block(BaseQuantBlock):
+    def __init__(self, inv_res: shufflenetv2_block, weight_quant_params: dict = {}, act_quant_params: dict = {}):
+        super(Quant_shufflenetv2_block, self).__init__()
+        self.stride = inv_res.stride
+
+        if inv_res.stride > 1:
+            self.branch1_conv1 = QuantModule(inv_res.branch1[0], weight_quant_params, act_quant_params)
+            self.branch1_conv2 = QuantModule(inv_res.branch1[2], weight_quant_params, act_quant_params, disable_act_quant=True)
+            self.branch1_conv2.activation_function = inv_res.branch1[4]
+        else:
+            self.branch1 = nn.Sequential()
+
+        self.branch2_conv1 = QuantModule(inv_res.branch2[0], weight_quant_params, act_quant_params)
+        self.branch2_conv2 = QuantModule(inv_res.branch2[3], weight_quant_params, act_quant_params)
+        self.branch2_conv3 = QuantModule(inv_res.branch2[5], weight_quant_params, act_quant_params, disable_act_quant=True)
+        self.branch2_conv1.activation_function = inv_res.branch2[2]
+        self.branch2_conv3.activation_function = inv_res.branch2[7]
+
+        self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
+
+    def forward(self, x):
+
+        if self.stride == 1:
+            x1, x2 = x.chunk(2, dim=1)
+            x2 = self.branch2_conv1(x2)
+            x2 = self.branch2_conv2(x2)
+            x2 = self.branch2_conv3(x2)
+
+            out = torch.cat((x1, x2), dim=1)
+        else:
+
+            x1 = self.branch1_conv1(x)
+            x1 = self.branch1_conv2(x1)
+
+            x2 = self.branch2_conv1(x)
+            x2 = self.branch2_conv2(x2)
+            x2 = self.branch2_conv3(x2)
+            out = torch.cat((x1, x2), dim=1)
+
+        if self.use_act_quant:
+            out = self.act_quantizer(out)
+
+        out = channel_shuffle(out, 2)
+
+        return out
+
+class Quant_mv1_block(BaseQuantBlock):
+    """
+    Implementation of Quantized Bottleneck Block used in ResNet-50, -101 and -152.
+    """
+
+    def __init__(self, bottleneck: DwsConvBlock, weight_quant_params: dict = {}, act_quant_params: dict = {}, eq=True):
+        super().__init__()
+        self.conv1 = QuantModule(bottleneck.dw_conv.conv, weight_quant_params, act_quant_params)
+        self.conv1.activation_function = nn.ReLU()
+
+        self.conv2 = QuantModule(bottleneck.pw_conv.conv, weight_quant_params, act_quant_params, disable_act_quant=True)
+        self.conv2.activation_function = nn.ReLU()
+
+        self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
+
+    def forward(self, x):
+
+        x = self.conv1(x)
+        x = self.conv2(x)
+
+        if self.use_act_quant:
+            x = self.act_quantizer(x)
+        return x
 
 specials = {
     BasicBlock: QuantBasicBlock,
@@ -194,4 +266,6 @@ specials = {
     ResBottleneckBlock: QuantResBottleneckBlock,
     InvertedResidual: QuantInvertedResidual,
     _InvertedResidual: _QuantInvertedResidual,
+    shufflenetv2_block: Quant_shufflenetv2_block,
+    DwsConvBlock: Quant_mv1_block
 }
